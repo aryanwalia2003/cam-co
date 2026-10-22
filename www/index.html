@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>iPhone Webcam</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#1e90ff">
+<style>
+  :root { color-scheme: dark; }
+  body { margin:0; background:#111; color:#eee; font-family:-apple-system,sans-serif;
+         display:flex; flex-direction:column; align-items:center; min-height:100vh; }
+  video { width:100%; max-width:480px; background:#000; border-radius:12px; margin-top:12px; }
+  .bar { display:flex; gap:10px; margin:14px 0; }
+  button { font-size:16px; padding:10px 18px; border-radius:8px; border:none;
+           background:#1e90ff; color:#fff; }
+  button.stop { background:#e03131; }
+  #status { font-size:13px; opacity:.7; margin-top:4px; }
+</style>
+</head>
+<body>
+<h3>iPhone &rarr; Laptop Webcam</h3>
+<video id="preview" autoplay playsinline muted></video>
+<div class="bar">
+  <button id="toggle">Start</button>
+  <button id="flip">Switch Cam</button>
+</div>
+<div id="status">idle</div>
+
+<script>
+// kaam: camera frames capture + laptop ko bhejna
+const video = document.getElementById('preview');
+const statusEl = document.getElementById('status');
+const canvas = document.createElement('canvas');
+const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+let stream = null;
+let sending = false;
+let facing = 'environment'; // peeche wala cam
+const FPS = 15;
+const JPEG_QUALITY = 0.6;
+
+async function startCamera() {
+  stream = await navigator.mediaDevices.getUserMedia({
+    video: { facingMode: facing, width: { ideal: 1280 }, height: { ideal: 720 } },
+    audio: false
+  });
+  video.srcObject = stream;
+}
+
+function stopCamera() {
+  if (stream) stream.getTracks().forEach(t => t.stop());
+  stream = null;
+}
+
+async function sendLoop() {
+  if (!sending) return;
+  if (video.videoWidth) {
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    ctx.drawImage(video, 0, 0);
+    const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', JPEG_QUALITY));
+    if (blob) {
+      fetch('/frame', { method: 'POST', body: blob, keepalive: false })
+        .then(() => { statusEl.textContent = 'streaming @ ' + new Date().toLocaleTimeString(); })
+        .catch(e => { statusEl.textContent = 'send error: ' + e.message; });
+    }
+  }
+  setTimeout(sendLoop, 1000 / FPS);
+}
+
+document.getElementById('toggle').onclick = async (e) => {
+  if (!sending) {
+    try {
+      await startCamera();
+      sending = true;
+      e.target.textContent = 'Stop';
+      e.target.classList.add('stop');
+      sendLoop();
+    } catch (err) {
+      statusEl.textContent = 'camera error: ' + err.message;
+    }
+  } else {
+    sending = false;
+    stopCamera();
+    e.target.textContent = 'Start';
+    e.target.classList.remove('stop');
+    statusEl.textContent = 'stopped';
+  }
+};
+
+document.getElementById('flip').onclick = async () => {
+  facing = facing === 'environment' ? 'user' : 'environment';
+  if (stream) { stopCamera(); await startCamera(); }
+};
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+</script>
+</body>
+</html>

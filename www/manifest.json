@@ -1,0 +1,11 @@
+{
+  "name": "iPhone Webcam",
+  "short_name": "Webcam",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#111111",
+  "theme_color": "#1e90ff",
+  "icons": [
+    { "src": "icon.png", "sizes": "180x180", "type": "image/png" }
+  ]
+}
